@@ -1,0 +1,47 @@
+# Neural ODE Transformer configuration
+# Continuous-depth Transformer using Neural ODE with advanced features
+
+[model]
+d_model = 256
+n_heads = 4
+d_ff = 1024
+vocab_size = 8000
+max_seq_len = 128
+is_neural_ode = true
+ode_t0 = 0.0
+ode_t1 = 1.0
+ode_solver = "Tsit5"
+# Adjoint sensitivity method: "InterpolatingAdjoint", "BacksolveAdjoint", "QuadratureAdjoint"
+ode_sensealg = "InterpolatingAdjoint"
+ode_atol = 1e-6
+ode_rtol = 1e-6
+# Integrator mode: "generic" (use DifferentialEquations) or "custom_fixed_step" (use custom RK4)
+ode_integrator = "generic"
+ode_nsteps = 4  # Number of steps for custom fixed-step integrator
+# Reversible ODE for memory efficiency (uses BacksolveAdjoint automatically)
+reversible = false
+n_layers = 4
+
+[training]
+batch_size = 16
+seq_len = 128
+num_steps = 10000
+log_every = 100
+eval_every = 1000
+lr = 1e-3
+weight_decay = 0.01
+grad_clip = 1.0
+warmup_steps = 500
+device = "auto"
+checkpoint_dir = "checkpoints"
+checkpoint_every = 1000
+save_best = true
+seed = 42
+log_dir = "logs"
+run_name = "neural_ode_transformer"
+
+[data]
+corpus_path = "data/corpus.txt"
+tokenizer_path = "data/tokenizer.json"
+vocab_size = 8000
+train_split = 0.9
