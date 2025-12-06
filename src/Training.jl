@@ -32,10 +32,13 @@ y: (seq_len, batch) - target token IDs (shifted by 1)
 function lm_loss(model, x, y)
     logits = model(x)  # (vocab, seq, batch)
     vocab, seq, batch = size(logits)
-    # flatten
+    # Reshape to (vocab, seq*batch) for loss computation
     logits2 = reshape(logits, vocab, :)
-    y2 = reshape(y, :)
-    return Flux.logitcrossentropy(logits2, y2)
+    # Reshape y to (seq*batch,) - flatten to match logits  
+    y2 = vec(y)
+    @assert all(1 .<= y2 .<= vocab) "Target indices must be in [1, vocab]"
+    y_onehot = Flux.onehotbatch(y2, 1:vocab)
+    return Flux.logitcrossentropy(logits2, y_onehot)
 end
 
 """

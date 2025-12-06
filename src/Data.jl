@@ -5,8 +5,6 @@ Data loading, tokenization, and batching utilities.
 """
 module Data
 
-# Random and Serialization are used via Base functions
-
 export build_tokenizer, load_corpus, encode_corpus, make_batches, save_tokenizer, load_tokenizer, split_train_val
 
 """

@@ -5,6 +5,7 @@ Discrete Transformer stack (baseline) and continuous transformer interface.
 """
 module ContinuousTransformer
 
+using Flux
 using ..Attention: TransformerBlock
 
 export StackedTransformer

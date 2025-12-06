@@ -19,14 +19,14 @@ Key features:
 """
 module NeuralODELM
 
-# Core modules
+# Core modules - include Models BEFORE Generation since Generation depends on Models
 include("Config.jl")
 include("Utils.jl")
 include("Data.jl")
+include("Models/Models.jl")
 include("Training.jl")
 include("Evaluation.jl")
 include("Generation.jl")
-include("Models/Models.jl")
 
 # Re-export public API
 using .Config: ConfigBundle, ModelConfig, TrainingConfig, DataConfig, load_config

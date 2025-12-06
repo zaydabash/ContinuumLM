@@ -8,15 +8,13 @@ Neural ODE block implementing continuous-depth Transformer with advanced feature
 
 The hidden state evolves continuously via an ODE parameterized by Transformer dynamics.
 """
-module NeuralODEBlock
+module NeuralODEBlockModule
 
 using Flux
 using DifferentialEquations
 using DiffEqFlux
 using DiffEqFlux: InterpolatingAdjoint, BacksolveAdjoint, QuadratureAdjoint, ZygoteVJP
 using ..Attention: TransformerBlock
-
-export NeuralODEBlock
 
 """
     NeuralODEBlock
@@ -186,4 +184,6 @@ end
 
 Flux.@functor NeuralODEBlock
 
-end # module
+export NeuralODEBlock
+
+end # module NeuralODEBlockModule

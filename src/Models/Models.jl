@@ -14,13 +14,13 @@ include("LanguageModel.jl")
 using .Embeddings
 using .Attention
 using .ContinuousTransformer
-using .NeuralODEBlock
+using .NeuralODEBlockModule
 using .LanguageModel
 
 export build_model, LanguageModel, LanguageModelStruct, LMState, init_state, generate_step
 
 """
-    build_model(mc::Config.ModelConfig)
+    build_model(mc)
 
 Construct a language model according to the configuration.
 """

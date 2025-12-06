@@ -8,7 +8,7 @@ module Generation
 using Flux
 using ..Utils
 using ..Data: SimpleTokenizer, encode, decode
-using ..Models
+using ..Models: LanguageModel
 
 export generate_text, sample_from_logits, generate_text_with_cache
 
@@ -37,7 +37,7 @@ function sample_from_logits(logits; temperature=1.0, top_k=0, top_p=0.0)
     # Top-p (nucleus) sampling
     if top_p > 0.0 && top_p < 1.0
         sorted_logits, sorted_idxs = sort(logits, rev=true)
-        probs = softmax(sorted_logits)
+        probs = Flux.softmax(sorted_logits)
         cumsum_probs = cumsum(probs)
         cutoff_idx = findfirst(x -> x >= top_p, cumsum_probs)
         if cutoff_idx !== nothing
@@ -47,10 +47,10 @@ function sample_from_logits(logits; temperature=1.0, top_k=0, top_p=0.0)
         end
     end
     
-    probs = softmax(logits)
+    probs = Flux.softmax(logits)
     # Simple sampling without Distributions.jl
     cumsum_probs = cumsum(probs)
-    r = Base.Random.rand()
+    r = rand()
     idx = findfirst(x -> x >= r, cumsum_probs)
     return idx !== nothing ? idx : length(probs)
 end
@@ -116,29 +116,27 @@ function generate_text_with_cache(model, tok::SimpleTokenizer, prompt::String;
     ids = encode(tok, prompt)
     
     # Initialize state for step-wise generation
-    state = Models.LanguageModel.init_state(model)
+    state = LanguageModel.init_state(model)
     
     # Process initial prompt tokens (if any) to initialize cache
     # For now, we'll process them one by one
     for token_id in ids
-        logits, state = Models.LanguageModel.generate_step(model, token_id, state)
+        logits, state = LanguageModel.generate_step(model, token_id, state)
     end
     
     # Generate new tokens
     for _ in 1:max_new_tokens
         # Get logits for current state
         last_token_id = ids[end]
-        logits, state = Models.LanguageModel.generate_step(model, last_token_id, state)
+        logits, state = LanguageModel.generate_step(model, last_token_id, state)
         
-        # Sample next token
-        next_id = sample_from_logits(logits; 
+        # Sample next token - logits is (vocab_size, 1, 1), extract first element
+        logits_vec = logits[:, 1, 1]
+        next_id = sample_from_logits(logits_vec; 
                                      temperature=temperature, 
                                      top_k=top_k, 
                                      top_p=top_p)
         push!(ids, next_id)
-        
-        # Update state with new token
-        state = Models.LanguageModel.LMState(state.cache, state.position)
     end
     
     return decode(tok, ids)
