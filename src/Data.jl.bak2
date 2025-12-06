@@ -5,7 +5,6 @@ Data loading, tokenization, and batching utilities.
 """
 module Data
 
-using Random: shuffle!
 export build_tokenizer, load_corpus, encode_corpus, make_batches, save_tokenizer, load_tokenizer, split_train_val
 
 """
@@ -143,7 +142,7 @@ y: target tokens (seq_len, batch) shifted by one.
 function make_batches(seqs::Vector{Vector{Int}}, batch_size::Int)
     # shuffle sequences
     shuffled = copy(seqs)
-    shuffle!(shuffled)
+    Base.Random.shuffle!(shuffled)
     nbatch = length(shuffled) ÷ batch_size
     if nbatch == 0
         error("Not enough sequences for batch size $batch_size")
@@ -171,7 +170,7 @@ end
 Split sequences into train and validation sets.
 """
 function split_train_val(seqs::Vector{Vector{Int}}, train_split::Float64)
-    shuffle!(seqs)
+    Base.Random.shuffle!(seqs)
     n_train = Int(floor(length(seqs) * train_split))
     return seqs[1:n_train], seqs[n_train+1:end]
 end
