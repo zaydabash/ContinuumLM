@@ -12,10 +12,10 @@ Example:
 """
 
 using Pkg
-Pkg.activate(joinpath(@__DIR__, ".."))
+Pkg.activate(@__DIR__ * "/..")
 
 using NeuralODELM
-using NeuralODELM.Config: load_config
+using NeuralODELM.Config
 using NeuralODELM.Data
 using NeuralODELM.Models
 using NeuralODELM.Training
