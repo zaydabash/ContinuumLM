@@ -6,6 +6,7 @@ Text generation utilities with various sampling strategies and KV caching suppor
 module Generation
 
 using Flux
+using Random: rand
 using ..Utils
 using ..Data: SimpleTokenizer, encode, decode
 using ..Models: LanguageModel

@@ -106,7 +106,7 @@ function train!(model, train_batches, val_batches, cfg::Config.ConfigBundle)
     device_fn = Utils.select_device(tc.device)
     model = device_fn(model)
 
-    opt = Optimisers.AdamW(tc.lr)
+    opt = Optimisers.AdamW(tc.lr, (beta1=0.9, beta2=0.999), tc.weight_decay)
     st = Optimisers.setup(opt, Flux.params(model))
 
     Utils.ensure_dir(tc.checkpoint_dir)

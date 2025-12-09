@@ -6,7 +6,8 @@ Data loading, tokenization, and batching utilities.
 module Data
 
 using Random: shuffle!
-export build_tokenizer, load_corpus, encode_corpus, make_batches, save_tokenizer, load_tokenizer, split_train_val
+
+export SimpleTokenizer, build_tokenizer, load_corpus, encode, decode, encode_corpus, make_batches, save_tokenizer, load_tokenizer, split_train_val
 
 """
     SimpleTokenizer
@@ -14,9 +15,115 @@ export build_tokenizer, load_corpus, encode_corpus, make_batches, save_tokenizer
 A simple word-level tokenizer for language modeling.
 """
 struct SimpleTokenizer
-    word_to_id::Dict{String, Int}
-    id_to_word::Dict{Int, String}
-    vocab_size::Int
+    vocab::Dict{String, Int}
+    idx_to_token::Vector{String}
+    unk_token::Int
+end
+
+"""
+    build_tokenizer(corpus::String; vocab_size::Int)
+
+Build a simple word-level tokenizer from the given corpus.
+"""
+function build_tokenizer(corpus::String; vocab_size::Int = 8000)
+    words = split(corpus, r"\s+|(?=[.,!?;])|(?<=[.,!?;])")
+    word_counts = Dict{String, Int}()
+    for word in words
+        if !isempty(word)
+            word_counts[word] = get(word_counts, word, 0) + 1
+        end
+    end
+
+    sorted_vocab = sort(collect(word_counts), by=x->x[2], rev=true)
+    
+    vocab = Dict{String, Int}()
+    idx_to_token = Vector{String}()
+    
+    push!(idx_to_token, "<UNK>")
+    push!(idx_to_token, "<EOS>")
+    push!(idx_to_token, "<BOS>")
+
+    vocab["<UNK>"] = 1
+    vocab["<EOS>"] = 2
+    vocab["<BOS>"] = 3
+
+    current_idx = 4
+    for (word, _) in sorted_vocab
+        if current_idx <= vocab_size
+            vocab[word] = current_idx
+            push!(idx_to_token, word)
+            current_idx += 1
+        else
+            break
+        end
+    end
+    
+    return SimpleTokenizer(vocab, idx_to_token, vocab["<UNK>"])
+end
+
+"""
+    encode(tok::SimpleTokenizer, text::String) -> Vector{Int}
+
+Encode text to token IDs.
+"""
+function encode(tok::SimpleTokenizer, text::String)
+    words = split(text, r"\s+|(?=[.,!?;])|(?<=[.,!?;])", keepempty=false)
+    ids = [get(tok.vocab, word, tok.unk_token) for word in words]
+    return ids
+end
+
+"""
+    decode(tok::SimpleTokenizer, ids::Vector{Int}) -> String
+
+Decode token IDs back to text.
+"""
+function decode(tok::SimpleTokenizer, ids::Vector{Int})
+    words = [tok.idx_to_token[id] for id in ids]
+    return join(words, " ")
+end
+
+"""
+    save_tokenizer(tok, path::String)
+
+Save a tokenizer to disk.
+"""
+function save_tokenizer(tok::SimpleTokenizer, path::String)
+    mkpath(dirname(path))
+    open(path, "w") do io
+        for (word, id) in tok.vocab
+            write(io, "$word,$id\n")
+        end
+    end
+end
+
+"""
+    load_tokenizer(path::String)
+
+Load a tokenizer from disk.
+"""
+function load_tokenizer(path::String)
+    vocab = Dict{String, Int}()
+    idx_to_token = String[]
+    max_id = 0
+    open(path, "r") do io
+        for line in eachline(io)
+            parts = split(line, ',')
+            if length(parts) == 2
+                word = parts[1]
+                id = parse(Int, parts[2])
+                vocab[word] = id
+                if id > max_id
+                    max_id = id
+                end
+            end
+        end
+    end
+    idx_to_token = Vector{String}(undef, max_id)
+    for (word, id) in vocab
+        idx_to_token[id] = word
+    end
+    unk_token_id = get(vocab, "<UNK>", 1)
+    return SimpleTokenizer(vocab, idx_to_token, unk_token_id)
 end
 
 """
@@ -34,86 +141,6 @@ function load_corpus(path::String)
 end
 
 """
-    build_tokenizer(corpus::String; vocab_size::Int)
-
-Build a simple word-level tokenizer from the given corpus.
-"""
-function build_tokenizer(corpus::String; vocab_size::Int = 8000)
-    words = split(corpus)
-    unique_words = unique(words)
-    
-    # Limit vocabulary size
-    vocab_list = unique_words[1:min(vocab_size-2, length(unique_words))]
-    
-    # Create mappings (reserve 0 for padding, 1 for UNK)
-    word_to_id = Dict{String, Int}()
-    id_to_word = Dict{Int, String}()
-    
-    word_to_id["<UNK>"] = 1
-    id_to_word[1] = "<UNK>"
-    
-    for (i, word) in enumerate(vocab_list)
-        id = i + 1
-        word_to_id[word] = id
-        id_to_word[id] = word
-    end
-    
-    return SimpleTokenizer(word_to_id, id_to_word, length(word_to_id))
-end
-
-"""
-    encode(tok::SimpleTokenizer, text::String) -> Vector{Int}
-
-Encode text to token IDs.
-"""
-function encode(tok::SimpleTokenizer, text::String)
-    words = split(text)
-    ids = Int[]
-    for word in words
-        id = get(tok.word_to_id, word, 1)  # 1 is UNK
-        push!(ids, id)
-    end
-    return ids
-end
-
-"""
-    decode(tok::SimpleTokenizer, ids::Vector{Int}) -> String
-
-Decode token IDs back to text.
-"""
-function decode(tok::SimpleTokenizer, ids::Vector{Int})
-    words = String[]
-    for id in ids
-        word = get(tok.id_to_word, id, "<UNK>")
-        push!(words, word)
-    end
-    return join(words, " ")
-end
-
-"""
-    save_tokenizer(tok, path::String)
-
-Save a tokenizer to disk.
-"""
-function save_tokenizer(tok::SimpleTokenizer, path::String)
-    mkpath(dirname(path))
-    open(path, "w") do io
-        Base.Serialization.serialize(io, tok)
-    end
-end
-
-"""
-    load_tokenizer(path::String)
-
-Load a tokenizer from disk.
-"""
-function load_tokenizer(path::String)
-    open(path, "r") do io
-        return Base.Serialization.deserialize(io)
-    end
-end
-
-"""
     encode_corpus(tok, corpus; seq_len)
 
 Encode corpus to token ids and chunk into sequences of length `seq_len`.
@@ -121,27 +148,22 @@ Return a vector of integer arrays.
 """
 function encode_corpus(tok::SimpleTokenizer, corpus::String; seq_len::Int)
     ids = encode(tok, corpus)
-    # simple chunking: discard tail
     n = length(ids) ÷ seq_len
     if n == 0
         error("Corpus too short for sequence length $seq_len")
     end
     ids = ids[1:(n*seq_len)]
-    x = reshape(ids, (seq_len, n)) # seq_len × n
-    return [collect(col) for col in eachcol(x)]
+    x = reshape(ids, (seq_len, n))
+    return [Vector{Int}(col) for col in eachcol(x)]
 end
 
 """
     make_batches(sequences, batch_size)
 
-Take a vector of token sequences (each Vector{Int}), group into batches,
-and return an iterator over (x, y) pairs for LM training.
-
-x: input tokens (seq_len, batch)
-y: target tokens (seq_len, batch) shifted by one.
+Take a vector of token sequences, shuffle, and group into batches.
+Returns vector of (x, y) tuples for language modeling.
 """
 function make_batches(seqs::Vector{Vector{Int}}, batch_size::Int)
-    # shuffle sequences
     shuffled = copy(seqs)
     shuffle!(shuffled)
     nbatch = length(shuffled) ÷ batch_size
@@ -161,7 +183,6 @@ function make_batches(seqs::Vector{Vector{Int}}, batch_size::Int)
         end
         push!(batches, (x, y))
     end
-
     return batches
 end
 

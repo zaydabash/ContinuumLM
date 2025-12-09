@@ -6,6 +6,7 @@ Utility functions for device selection, seeding, and other helpers.
 module Utils
 
 using CUDA
+import Random
 
 """
     select_device(device::String)
@@ -27,10 +28,10 @@ end
 
 Set global RNG seed for reproducibility.
 """
-function set_seed(seed::Integer)
-    Base.Random.seed!(seed)
+function set_seed(s::Integer)
+    Random.seed!(s)
     if CUDA.has_cuda()
-        CUDA.seed!(seed)
+        CUDA.seed!(s)
     end
 end
 
