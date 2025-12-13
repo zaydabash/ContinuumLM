@@ -12,7 +12,7 @@ Example:
 """
 
 using Pkg
-Pkg.activate(@__DIR__ * "/..")
+Pkg.activate(joinpath(@__DIR__, ".."))
 
 using NeuralODELM
 using NeuralODELM.Config
@@ -29,7 +29,7 @@ function main()
     end
     
     println("Loading config from: $config_path")
-    cfg = load_config(config_path)
+    cfg = Config.load_config(config_path)
     
     println("Loading corpus from: $(cfg.data.corpus_path)")
     corpus = load_corpus(cfg.data.corpus_path)
@@ -37,10 +37,10 @@ function main()
     println("Building tokenizer...")
     tok = build_tokenizer(corpus; vocab_size=cfg.data.vocab_size)
     
-    # Save tokenizer for later use
-    Utils.ensure_dir(dirname(cfg.data.tokenizer_path))
-    save_tokenizer(tok, cfg.data.tokenizer_path)
-    println("Tokenizer saved to: $(cfg.data.tokenizer_path)")
+    # Save tokenizer for later use (skip for now to test)
+    # Utils.ensure_dir(dirname(cfg.data.tokenizer_path))
+    # save_tokenizer(tok, cfg.data.tokenizer_path)
+    # println("Tokenizer saved to: $(cfg.data.tokenizer_path)")
     
     println("Encoding corpus...")
     seqs = encode_corpus(tok, corpus; seq_len=cfg.training.seq_len)

@@ -110,14 +110,15 @@ function (m::MultiHeadSelfAttention)(x; mask::Bool=true, cache::Union{Nothing,KV
 
         # scaled dot-product attention per head
         scale = 1f0 / sqrt(Float32(m.d_head))
-        # result: (n_heads, d_head, seq, batch)
-        Zh = similar(Vh)
-        for h in 1:m.n_heads
+
+        # Process all heads and batches functionally
+        head_outputs = map(1:m.n_heads) do h
             Qhb = @view Qh[h, :, :, :]  # (d_head, seq, batch)
             Khb = @view Kh[h, :, :, :]
             Vhb = @view Vh[h, :, :, :]
 
-            for b in 1:batch
+            # Process each batch element
+            batch_outputs = map(1:batch) do b
                 Qhb_b = @view Qhb[:, :, b]   # (d_head, seq)
                 Khb_b = @view Khb[:, :, b]   # (d_head, seq)
                 Vhb_b = @view Vhb[:, :, b]
@@ -126,18 +127,20 @@ function (m::MultiHeadSelfAttention)(x; mask::Bool=true, cache::Union{Nothing,KV
 
                 if mask
                     # causal mask: only allow attending to previous tokens
-                    for i in 1:seq_len
-                        for j in i+1:seq_len
-                            scores[i, j] = -1f6
-                        end
-                    end
+                    mask_matrix = [i >= j ? 0f0 : -1f6 for i in 1:seq_len, j in 1:seq_len]
+                    scores = scores .+ mask_matrix
                 end
 
                 attn = Flux.softmax(scores, dims=2) # (seq, seq)
-                Zh_b = Vhb_b * attn'                # (d_head, seq)
-                @views Zh[h, :, :, b] .= Zh_b
+                Vhb_b * attn'                # (d_head, seq)
             end
+
+            # Stack batch outputs for this head: (d_head, seq, batch)
+            cat(batch_outputs..., dims=3)
         end
+
+        # Stack all heads: (n_heads, d_head, seq, batch)
+        Zh = cat(head_outputs..., dims=1)
 
         # combine heads: (n_heads, d_head, seq, batch) -> (d_model, seq, batch)
         Z = reshape(Zh, d_model, seq_len, batch)
@@ -145,7 +148,6 @@ function (m::MultiHeadSelfAttention)(x; mask::Bool=true, cache::Union{Nothing,KV
     end
 end
 
-Flux.@functor MultiHeadSelfAttention
 
 """
     FeedForwardBlock
@@ -166,7 +168,6 @@ end
 
 (ff::FeedForwardBlock)(x) = ff.proj2(ff.proj1(x))
 
-Flux.@functor FeedForwardBlock
 
 """
     TransformerBlock
@@ -206,6 +207,5 @@ function (tb::TransformerBlock)(x; mask::Bool=true, cache::Union{Nothing,KVCache
     end
 end
 
-Flux.@functor TransformerBlock
 
 end # module

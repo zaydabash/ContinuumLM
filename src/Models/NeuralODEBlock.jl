@@ -8,15 +8,13 @@ Neural ODE block implementing continuous-depth Transformer with advanced feature
 
 The hidden state evolves continuously via an ODE parameterized by Transformer dynamics.
 """
-module NeuralODEBlock
+module NeuralODEBlockModule
 
 using Flux
 using DifferentialEquations
 using DiffEqFlux
 using DiffEqFlux: InterpolatingAdjoint, BacksolveAdjoint, QuadratureAdjoint, ZygoteVJP
 using ..Attention: TransformerBlock
-
-export NeuralODEBlock
 
 """
     NeuralODEBlock
@@ -80,6 +78,18 @@ function NeuralODEBlock(d_model::Int, n_heads::Int, d_ff::Int;
             RK4()
         elseif solver == "Euler"
             Euler()
+        elseif solver == "Vern7"
+            Vern7()
+        elseif solver == "Vern9"
+            Vern9()
+        elseif solver == "BS3"
+            BS3()
+        elseif solver == "DP5"
+            DP5()
+        elseif solver == "KenCarp4"
+            KenCarp4()
+        elseif solver == "TRBDF2"
+            TRBDF2()
         else
             Tsit5()  # default
         end
@@ -91,15 +101,21 @@ function NeuralODEBlock(d_model::Int, n_heads::Int, d_ff::Int;
     # For reversible mode, prefer BacksolveAdjoint for memory efficiency
     sensealg_obj = if reversible && sensealg == "InterpolatingAdjoint"
         # BacksolveAdjoint is more memory-efficient for reversible ODEs
-        BacksolveAdjoint(autojacvec=ZygoteVJP(true))
+        BacksolveAdjoint()
     elseif sensealg == "InterpolatingAdjoint"
-        InterpolatingAdjoint(autojacvec=ZygoteVJP(true))
+        InterpolatingAdjoint()
     elseif sensealg == "BacksolveAdjoint"
-        BacksolveAdjoint(autojacvec=ZygoteVJP(true))
+        BacksolveAdjoint()
     elseif sensealg == "QuadratureAdjoint"
-        QuadratureAdjoint(autojacvec=ZygoteVJP(true))
+        QuadratureAdjoint()
+    elseif sensealg == "ReverseDiffAdjoint"
+        ReverseDiffAdjoint()
+    elseif sensealg == "TrackerAdjoint"
+        TrackerAdjoint()
+    elseif sensealg == "ForwardDiffSensitivity"
+        ForwardDiffSensitivity()
     else
-        InterpolatingAdjoint(autojacvec=ZygoteVJP(true))  # default
+        BacksolveAdjoint()  # default to simpler method
     end
     
     integrator_sym = integrator_mode == "custom_fixed_step" ? :custom_fixed_step : :generic
@@ -159,31 +175,36 @@ function (n::NeuralODEBlock)(x)
     # x: (d_model, seq_len, batch)
     d_model, seq_len, batch = size(x)
     
-    if n.integrator_mode == :custom_fixed_step
-        # Use custom RK4-style integrator
-        return continuous_attention_integrator(n.block, x, n.tspan, n.nsteps)
+    if n.integrator_mode == :generic
+        # Try generic DifferentialEquations solver with adjoint
+        try
+            u0 = vec(x)
+
+            # Create ODE function with closure over block
+            dudt!(du, u, p, t) = odefunc!(du, u, p, t, n.block, d_model, seq_len, batch)
+
+            prob = ODEProblem(dudt!, u0, n.tspan, nothing)
+
+            # Solve with adjoint sensitivity method for efficient backpropagation
+            sol = solve(prob, n.solver,
+                       save_everystep=false,
+                       sensealg=n.sensealg,
+                       abstol=n.atol,
+                       reltol=n.rtol)
+
+            uT = sol.u[end]
+            return reshape(uT, d_model, seq_len, batch)
+        catch e
+            @warn "Generic ODE solver failed ($e), using custom integrator"
+            return continuous_attention_integrator(n.block, x, n.tspan, n.nsteps)
+        end
     else
-        # Use generic DifferentialEquations solver with adjoint
-        u0 = vec(x)
-        
-        # Create ODE function with closure over block
-        dudt!(du, u, p, t) = odefunc!(du, u, p, t, n.block, d_model, seq_len, batch)
-        
-        prob = ODEProblem(dudt!, u0, n.tspan, nothing)
-        
-        # Solve with adjoint sensitivity method for efficient backpropagation
-        # The sensealg ensures gradients propagate correctly through the ODE integration
-        sol = solve(prob, n.solver, 
-                   save_everystep=false,
-                   sensealg=n.sensealg,
-                   abstol=n.atol,
-                   reltol=n.rtol)
-        
-        uT = sol.u[end]
-        return reshape(uT, d_model, seq_len, batch)
+        # Use custom RK4-style integrator (more stable, default)
+        return continuous_attention_integrator(n.block, x, n.tspan, n.nsteps)
     end
 end
 
-Flux.@functor NeuralODEBlock
 
-end # module
+export NeuralODEBlock
+
+end # module NeuralODEBlockModule

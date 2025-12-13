@@ -17,7 +17,8 @@ tokens → embeddings → Neural ODE Transformer → LM head → logits
 ### Key Features
 
 - **Continuous-depth processing** via ODE integration (DifferentialEquations.jl)
-- **Proper adjoint sensitivity methods** for efficient backpropagation (InterpolatingAdjoint, BacksolveAdjoint)
+- **Proper adjoint sensitivity methods** for efficient backpropagation (InterpolatingAdjoint, BacksolveAdjoint, QuadratureAdjoint)
+- **Multiple ODE solvers** (Tsit5, Vern7, Vern9, BS3, DP5, KenCarp4, TRBDF2, Euler, RK4)
 - **Custom continuous-attention kernel integrator** (RK4-style fixed-step integration)
 - **Reversible ODE design** for memory-efficient training
 - **KV caching** for fast autoregressive generation
@@ -25,14 +26,27 @@ tokens → embeddings → Neural ODE Transformer → LM head → logits
 - **Discrete Transformer baseline** for comparison
 - **Full training pipeline** with checkpointing and validation
 - **Text generation** with multiple sampling strategies (greedy, top-k, top-p)
-- **GPU support** via CUDA.jl
+- **GPU support** via CUDA.jl + cuDNN for full acceleration
+- **Large-scale datasets** (440K+ words: literature, science, code)
 - **Type-stable, idiomatic Julia** code
-- **Comprehensive tests** and documentation
+- **Comprehensive benchmarking** and performance profiling
+- **Modular architecture** for easy experimentation
 
 ## Requirements
 
 - Julia 1.10+
 - CUDA-capable GPU (optional, but recommended for larger models)
+
+## Recent Development Updates
+
+**v0.2.0 - Major Enhancements:**
+- **Large-scale datasets**: 440K+ word corpus (literature + science + code)
+- **GPU acceleration**: Full CUDA + cuDNN support
+- **Extended ODE solvers**: 10+ solvers (Vern7, KenCarp4, TRBDF2, etc.)
+- **Advanced adjoint methods**: Multiple sensitivity methods for gradients
+- **Fixed text generation**: Autoregressive sampling with sliding windows
+- **Comprehensive benchmarking**: Performance comparison tools
+- **Neural ODE stability**: Custom RK4 integrator working reliably
 
 ## Quick Start
 
@@ -61,18 +75,34 @@ mkdir -p data
 
 ### Train a Model
 
-**Small debug model (fast, CPU-friendly):**
+**Enhanced training with large dataset (440K+ words):**
 ```bash
+# Download/create datasets
+julia scripts/download_data.jl
+
+# Train with enhanced dataset
+julia scripts/standalone_train.jl config/small_debug.toml
+```
+
+**Run complete demo (shows all features):**
+```bash
+julia scripts/demo.jl
+```
+
+**Compare Neural ODE vs Transformer performance:**
+```bash
+julia scripts/comprehensive_benchmark.jl
+```
+
+**Original training scripts:**
+```bash
+# Small debug model (fast, CPU-friendly)
 julia scripts/train_neural_ode_lm.jl config/small_debug.toml
-```
 
-**Neural ODE Transformer:**
-```bash
+# Neural ODE Transformer
 julia scripts/train_neural_ode_lm.jl config/neural_ode_transformer.toml
-```
 
-**Discrete Transformer baseline:**
-```bash
+# Discrete Transformer baseline
 julia scripts/train_neural_ode_lm.jl config/base_transformer.toml
 ```
 

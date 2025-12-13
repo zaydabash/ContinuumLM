@@ -11,8 +11,8 @@ using DifferentialEquations
 using ..Embeddings
 using ..Attention
 using ..ContinuousTransformer
-using ..NeuralODEBlock
-using ..Config: ModelConfig
+using ..NeuralODEBlockModule
+# ModelConfig will be available via parent module when this is included
 
 export LanguageModelStruct, build_language_model, LMState, init_state, generate_step
 
@@ -22,7 +22,7 @@ export LanguageModelStruct, build_language_model, LMState, init_state, generate_
 State for autoregressive generation with KV caching.
 """
 struct LMState
-    cache::Union{Nothing,Attention.KVCache}
+    cache::Union{Nothing,Vector{Attention.KVCache}}
     position::Int  # Current position in sequence
 end
 
@@ -34,7 +34,7 @@ Top-level language model wrapper combining all components.
 struct LanguageModelStruct
     token_emb::TokenEmbedding
     pos_enc::PositionalEncoding
-    core_block::Union{NeuralODEBlock.NeuralODEBlock, ContinuousTransformer.StackedTransformer}
+    core_block::Union{NeuralODEBlockModule.NeuralODEBlock, ContinuousTransformer.StackedTransformer}
     lm_head::Dense
     is_neural_ode::Bool
 end
@@ -51,7 +51,6 @@ function (lm::LanguageModelStruct)(x)
     return reshape(logits, :, seq, batch)  # (vocab_size, seq, batch)
 end
 
-Flux.@functor LanguageModelStruct
 
 """
     init_state(lm::LanguageModelStruct)
@@ -87,7 +86,7 @@ function generate_step(lm::LanguageModelStruct, token_id::Int, state::LMState)
     h = h .+ reshape(pos_enc_slice, d_model, 1, 1)
     
     # Apply core block
-    if lm.is_neural_ode
+    if lm.core_block isa NeuralODEBlockModule.NeuralODEBlock
         # Neural ODE path: use full sequence mode (KV caching not yet supported)
         # TODO: Implement KV caching for Neural ODE path
         h = lm.core_block(h)
@@ -123,12 +122,12 @@ function generate_step(lm::LanguageModelStruct, token_id::Int, state::LMState)
 end
 
 """
-    build_language_model(mc::ModelConfig)
+    build_language_model(mc)
 
 Build either a discrete Transformer stack or a Neural ODE transformer
-according to the configuration.
+according to the configuration. mc should be a ModelConfig instance.
 """
-function build_language_model(mc::ModelConfig)
+function build_language_model(mc)
     token_emb = Embeddings.TokenEmbedding(mc.vocab_size, mc.d_model)
     pos_enc = Embeddings.PositionalEncoding(mc.d_model, mc.max_seq_len)
 
@@ -144,7 +143,7 @@ function build_language_model(mc::ModelConfig)
     end
 
     core_block = if mc.is_neural_ode
-        NeuralODEBlock.NeuralODEBlock(mc.d_model, mc.n_heads, mc.d_ff;
+        NeuralODEBlockModule.NeuralODEBlock(mc.d_model, mc.n_heads, mc.d_ff;
                                       t0 = mc.ode_t0, t1 = mc.ode_t1,
                                       solver = solver,
                                       sensealg = mc.ode_sensealg,

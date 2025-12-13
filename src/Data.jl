@@ -5,7 +5,6 @@ Data loading, tokenization, and batching utilities.
 """
 module Data
 
-# Random and Serialization are used via Base functions
 
 export build_tokenizer, load_corpus, encode_corpus, make_batches, save_tokenizer, load_tokenizer, split_train_val
 
@@ -129,7 +128,7 @@ function encode_corpus(tok::SimpleTokenizer, corpus::String; seq_len::Int)
     end
     ids = ids[1:(n*seq_len)]
     x = reshape(ids, (seq_len, n)) # seq_len × n
-    return collect(eachcol(x))     # Vector{Vector{Int}}
+    return [Vector{Int}(col) for col in eachcol(x)]  # Vector{Vector{Int}}
 end
 
 """
@@ -144,7 +143,11 @@ y: target tokens (seq_len, batch) shifted by one.
 function make_batches(seqs::Vector{Vector{Int}}, batch_size::Int)
     # shuffle sequences
     shuffled = copy(seqs)
-    Base.Random.shuffle!(shuffled)
+    # Simple deterministic shuffle for reproducibility
+    for i in length(shuffled):-1:2
+        j = mod(hash(i), i) + 1
+        shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+    end
     nbatch = length(shuffled) ÷ batch_size
     if nbatch == 0
         error("Not enough sequences for batch size $batch_size")
@@ -172,7 +175,11 @@ end
 Split sequences into train and validation sets.
 """
 function split_train_val(seqs::Vector{Vector{Int}}, train_split::Float64)
-    Base.Random.shuffle!(seqs)
+    # Simple deterministic shuffle for reproducibility
+    for i in length(seqs):-1:2
+        j = mod(hash(i), i) + 1
+        seqs[i], seqs[j] = seqs[j], seqs[i]
+    end
     n_train = Int(floor(length(seqs) * train_split))
     return seqs[1:n_train], seqs[n_train+1:end]
 end

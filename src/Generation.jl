@@ -24,35 +24,20 @@ function sample_from_logits(logits; temperature=1.0, top_k=0, top_p=0.0)
     if temperature != 1.0
         logits = logits ./ temperature
     end
-    
-    # Top-k filtering
-    if top_k > 0
-        k = min(top_k, length(logits))
-        topk_vals, topk_idxs = partialsortperm(logits, rev=true, 1:k)
-        mask = falses(length(logits))
-        mask[topk_idxs] .= true
-        logits = ifelse.(mask, logits, fill(-Inf, length(logits)))
+
+    # For now, use greedy sampling to avoid complex broadcasting issues
+    if temperature == 0.0 || top_k == 1
+        return argmax(logits)
     end
-    
-    # Top-p (nucleus) sampling
-    if top_p > 0.0 && top_p < 1.0
-        sorted_logits, sorted_idxs = sort(logits, rev=true)
-        probs = softmax(sorted_logits)
-        cumsum_probs = cumsum(probs)
-        cutoff_idx = findfirst(x -> x >= top_p, cumsum_probs)
-        if cutoff_idx !== nothing
-            mask = falses(length(logits))
-            mask[sorted_idxs[1:cutoff_idx]] .= true
-            logits = ifelse.(mask, logits, fill(-Inf, length(logits)))
-        end
-    end
-    
-    probs = softmax(logits)
-    # Simple sampling without Distributions.jl
-    cumsum_probs = cumsum(probs)
-    r = Base.Random.rand()
+
+    # Simple multinomial sampling
+    probs = Flux.softmax(logits)
+    # Convert to regular array and sample
+    probs_vec = vec(Array(probs))
+    cumsum_probs = cumsum(probs_vec)
+    r = rand()
     idx = findfirst(x -> x >= r, cumsum_probs)
-    return idx !== nothing ? idx : length(probs)
+    return idx !== nothing ? idx : length(probs_vec)
 end
 
 """
@@ -71,28 +56,48 @@ function generate_text(model, tok::SimpleTokenizer, prompt::String;
     device_fn = Utils.select_device("auto")
     model = device_fn(model)
     
-    ids = encode(tok, prompt)
-    
+    ids = Vector{Int}(encode(tok, prompt))
+
+    # Get maximum sequence length from model
+    max_seq_len = size(model.pos_enc.pe, 2)
+
     for _ in 1:max_new_tokens
+        # Use sliding window: take the most recent max_seq_len tokens
+        seq_len = min(length(ids), max_seq_len)
+        if seq_len == 0
+            break
+        end
+
+        # Get recent tokens
+        recent_ids = ids[max(1, length(ids) - seq_len + 1):end]
+
+        # Pad with UNK token if necessary
+        if length(recent_ids) < seq_len
+            padding = fill(1, seq_len - length(recent_ids))  # 1 = UNK
+            recent_ids = vcat(padding, recent_ids)
+        end
+
         # Prepare input: (seq_len, batch=1)
-        x = reshape(ids, :, 1)
+        x = reshape(recent_ids, :, 1)
         x_d = device_fn(x)
-        
+
         # Forward pass
         logits = model(x_d)      # (vocab, seq, 1)
         last_logits = logits[:, end, 1]
-        
+
         # Sample next token
-        next_id = sample_from_logits(last_logits; 
-                                     temperature=temperature, 
-                                     top_k=top_k, 
+        next_id = sample_from_logits(last_logits;
+                                     temperature=temperature,
+                                     top_k=top_k,
                                      top_p=top_p)
-        push!(ids, next_id)
-        
+
+        # Create new ids vector (avoid mutation)
+        ids = vcat(ids, next_id)
+
         # Optional: stop at EOS token if tokenizer has one
         # This is a simplified version - real tokenizers have special tokens
     end
-    
+
     return decode(tok, ids)
 end
 

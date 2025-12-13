@@ -25,7 +25,6 @@ function (te::TokenEmbedding)(x)
     return te.emb(x)
 end
 
-Flux.@functor TokenEmbedding
 
 """
     PositionalEncoding
@@ -66,7 +65,6 @@ function (p::PositionalEncoding)(x)
     return x .+ reshape(pe_slice, d_model, seq_len, 1)
 end
 
-Flux.@functor PositionalEncoding
 
 end # module
 

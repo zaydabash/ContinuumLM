@@ -6,22 +6,22 @@ d_model = 64
 n_heads = 2
 d_ff = 256
 vocab_size = 1000
-max_seq_len = 32
-is_neural_ode = true
+max_seq_len = 8
+is_neural_ode = false
 ode_t0 = 0.0
 ode_t1 = 1.0
 ode_solver = "Tsit5"
 ode_sensealg = "InterpolatingAdjoint"
 ode_atol = 1e-6
 ode_rtol = 1e-6
-ode_integrator = "generic"
+ode_integrator = "custom_fixed_step"
 ode_nsteps = 4
 reversible = false
 n_layers = 2
 
 [training]
-batch_size = 4
-seq_len = 32
+batch_size = 1
+seq_len = 8
 num_steps = 1000
 log_every = 50
 eval_every = 200
@@ -38,7 +38,7 @@ log_dir = "logs"
 run_name = "small_debug"
 
 [data]
-corpus_path = "data/corpus.txt"
+corpus_path = "data/small_combined_corpus.txt"
 tokenizer_path = "data/tokenizer.json"
 vocab_size = 1000
 train_split = 0.9

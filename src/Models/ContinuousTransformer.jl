@@ -5,6 +5,7 @@ Discrete Transformer stack (baseline) and continuous transformer interface.
 """
 module ContinuousTransformer
 
+using Flux
 using ..Attention: TransformerBlock
 
 export StackedTransformer
@@ -31,7 +32,6 @@ function (st::StackedTransformer)(x)
     return h
 end
 
-Flux.@functor StackedTransformer
 
 end # module
 
