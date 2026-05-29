@@ -59,7 +59,7 @@ end
 
 Save model checkpoint to disk.
 """
-function save_checkpoint(model, path::String, step::Int, loss::Float32)
+function save_checkpoint(model, path::String, step::Int, loss::Real)
     Utils.ensure_dir(dirname(path))
     BSON.@save path model step loss
     Base.println("Saved checkpoint to $path (step=$step, loss=$loss)")
@@ -79,16 +79,17 @@ function load_checkpoint(path::String)
 end
 
 """
-    compute_grad_norm(back)
+    compute_grad_norm(grads)
 
-Compute the L2 norm of gradients.
+Compute the L2 norm of gradients from Flux.withgradient output.
 """
-function compute_grad_norm(back)
+function compute_grad_norm(grads)
     total_norm_sq = 0.0
-    for (p, g) in back
-        if g !== nothing
+    Flux.fmap(grads) do g
+        if g isa AbstractArray
             total_norm_sq += sum(x -> x^2, g)
         end
+        g
     end
     return sqrt(total_norm_sq)
 end
@@ -106,8 +107,12 @@ function train!(model, train_batches, val_batches, cfg::Config.ConfigBundle)
     device_fn = Utils.select_device(tc.device)
     model = device_fn(model)
 
-    opt = Optimisers.AdamW(tc.lr)
-    st = Optimisers.setup(opt, Flux.params(model))
+    opt = if tc.grad_clip > 0
+        Optimisers.OptimiserChain(Optimisers.ClipGrad(tc.grad_clip), Optimisers.AdamW(tc.lr))
+    else
+        Optimisers.AdamW(tc.lr)
+    end
+    st = Optimisers.setup(opt, model)
 
     Utils.ensure_dir(tc.checkpoint_dir)
     
@@ -143,23 +148,13 @@ function train!(model, train_batches, val_batches, cfg::Config.ConfigBundle)
         x_d = device_fn(x)
         y_d = device_fn(y)
 
-        loss, back = Flux.withgradient(() -> lm_loss(model, x_d, y_d), Flux.params(model))
+        loss, grads = Flux.withgradient(model) do m
+            lm_loss(m, x_d, y_d)
+        end
 
         avg_loss = 0.9 * avg_loss + 0.1 * loss
 
-        # Gradient clipping
-        if tc.grad_clip > 0
-            for (p, g) in back
-                if g !== nothing
-                    g_norm = sqrt(sum(x -> x^2, g))
-                    if g_norm > tc.grad_clip
-                        back[p] = g .* (tc.grad_clip / g_norm)
-                    end
-                end
-            end
-        end
-
-        st, _ = Optimisers.update(st, Flux.params(model), back)
+        st, model = Optimisers.update(st, model, grads[1])
 
         # Logging
         if step % tc.log_every == 0
@@ -167,13 +162,12 @@ function train!(model, train_batches, val_batches, cfg::Config.ConfigBundle)
             
             # TensorBoard logging
             if tb_logger !== nothing
-                log_value(tb_logger, "train/loss", loss, step)
-                log_value(tb_logger, "train/avg_loss", avg_loss, step)
-                log_value(tb_logger, "train/lr", current_lr, step)
-                
-                # Log gradient norm
-                grad_norm = compute_grad_norm(back)
-                log_value(tb_logger, "train/grad_norm", grad_norm, step)
+                log_value(tb_logger, "train/loss", loss; step=step)
+                log_value(tb_logger, "train/avg_loss", avg_loss; step=step)
+                log_value(tb_logger, "train/lr", current_lr; step=step)
+
+                grad_norm = compute_grad_norm(grads[1])
+                log_value(tb_logger, "train/grad_norm", grad_norm; step=step)
             end
         end
 
@@ -186,8 +180,8 @@ function train!(model, train_batches, val_batches, cfg::Config.ConfigBundle)
             
             # TensorBoard logging for validation
             if tb_logger !== nothing
-                log_value(tb_logger, "eval/loss", val_loss, step)
-                log_value(tb_logger, "eval/perplexity", val_ppl, step)
+                log_value(tb_logger, "eval/loss", val_loss; step=step)
+                log_value(tb_logger, "eval/perplexity", val_ppl; step=step)
             end
             
             if tc.save_best && val_loss < best_val_loss

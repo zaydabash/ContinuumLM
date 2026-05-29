@@ -6,6 +6,8 @@ Multi-head self-attention and Transformer block components with KV caching suppo
 module Attention
 
 using Flux
+using NNlib
+using ChainRulesCore: @ignore_derivatives
 
 export MultiHeadSelfAttention, FeedForwardBlock, TransformerBlock, KVCache
 
@@ -95,52 +97,44 @@ function (m::MultiHeadSelfAttention)(x; mask::Bool=true, cache::Union{Nothing,KV
         return m.Wo(Z), new_cache
     else
         # Training mode: full sequence, no cache
-        Q = m.Wq(x)
+        # Use batched matmul — no in-place mutation, fully Zygote-compatible
+        Q = m.Wq(x)  # (d_model, seq, batch)
         K = m.Wk(x)
         V = m.Wv(x)
 
-        function split_heads(t)
-            # (d_model, seq, batch) -> (n_heads, d_head, seq, batch)
-            return reshape(t, m.n_heads, m.d_head, seq_len, batch)
-        end
+        # Reshape and merge heads into batch dim for batched matmul
+        # (d_model, seq, batch) -> (d_head, n_heads, seq, batch)
+        #                       -> (d_head, seq, n_heads*batch) via permute+reshape
+        Q_r = reshape(Q, m.d_head, m.n_heads, seq_len, batch)
+        K_r = reshape(K, m.d_head, m.n_heads, seq_len, batch)
+        V_r = reshape(V, m.d_head, m.n_heads, seq_len, batch)
 
-        Qh = split_heads(Q)
-        Kh = split_heads(K)
-        Vh = split_heads(V)
+        Q_p = reshape(permutedims(Q_r, (1, 3, 2, 4)), m.d_head, seq_len, m.n_heads * batch)
+        K_p = reshape(permutedims(K_r, (1, 3, 2, 4)), m.d_head, seq_len, m.n_heads * batch)
+        V_p = reshape(permutedims(V_r, (1, 3, 2, 4)), m.d_head, seq_len, m.n_heads * batch)
 
-        # scaled dot-product attention per head
         scale = 1f0 / sqrt(Float32(m.d_head))
-        # result: (n_heads, d_head, seq, batch)
-        Zh = similar(Vh)
-        for h in 1:m.n_heads
-            Qhb = @view Qh[h, :, :, :]  # (d_head, seq, batch)
-            Khb = @view Kh[h, :, :, :]
-            Vhb = @view Vh[h, :, :, :]
 
-            for b in 1:batch
-                Qhb_b = @view Qhb[:, :, b]   # (d_head, seq)
-                Khb_b = @view Khb[:, :, b]   # (d_head, seq)
-                Vhb_b = @view Vhb[:, :, b]
+        # scores: (seq, seq, n_heads*batch)
+        # K^T @ Q: (seq, d_head, nb) @ (d_head, seq, nb) = (seq, seq, nb)
+        scores = NNlib.batched_mul(permutedims(K_p, (2, 1, 3)), Q_p) .* scale
 
-                scores = (Qhb_b' * Khb_b) .* scale  # (seq, seq)
-
-                if mask
-                    # causal mask: only allow attending to previous tokens
-                    for i in 1:seq_len
-                        for j in i+1:seq_len
-                            scores[i, j] = -1f6
-                        end
-                    end
-                end
-
-                attn = Flux.softmax(scores, dims=2) # (seq, seq)
-                Zh_b = Vhb_b * attn'                # (d_head, seq)
-                @views Zh[h, :, :, b] .= Zh_b
-            end
+        if mask
+            # causal mask: position i cannot attend to position j > i
+            # @ignore_derivatives tells Zygote the mask has no learnable params
+            causal = @ignore_derivatives Float32[j > i ? -1f6 : 0f0 for i in 1:seq_len, j in 1:seq_len]
+            scores = scores .+ causal
         end
 
-        # combine heads: (n_heads, d_head, seq, batch) -> (d_model, seq, batch)
-        Z = reshape(Zh, d_model, seq_len, batch)
+        attn = Flux.softmax(scores, dims=1)  # (seq, seq, n_heads*batch)
+
+        # Z: V @ attn -> (d_head, seq, nb) @ (seq, seq, nb) = (d_head, seq, nb)
+        Z_p = NNlib.batched_mul(V_p, attn)
+
+        # Reshape back: (d_head, seq, n_heads*batch) -> (d_model, seq, batch)
+        Z_r = reshape(Z_p, m.d_head, seq_len, m.n_heads, batch)
+        Z = reshape(permutedims(Z_r, (1, 3, 2, 4)), d_model, seq_len, batch)
+
         return m.Wo(Z)
     end
 end

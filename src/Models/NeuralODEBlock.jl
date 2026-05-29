@@ -11,6 +11,7 @@ The hidden state evolves continuously via an ODE parameterized by Transformer dy
 module NeuralODEBlockModule
 
 using Flux
+using Functors
 using DifferentialEquations
 using DiffEqFlux
 using DiffEqFlux: InterpolatingAdjoint, BacksolveAdjoint, QuadratureAdjoint, ZygoteVJP
@@ -134,7 +135,7 @@ function continuous_attention_integrator(block::TransformerBlock,
                                          tspan::Tuple{Float64,Float64},
                                          nsteps::Int)
     t0, t1 = tspan
-    dt = (t1 - t0) / nsteps
+    dt = Float32((t1 - t0) / nsteps)
     h = h0
     
     for i in 1:nsteps
@@ -182,7 +183,7 @@ function (n::NeuralODEBlock)(x)
     end
 end
 
-Flux.@functor NeuralODEBlock
+Functors.@functor NeuralODEBlock (block,)
 
 export NeuralODEBlock
 
