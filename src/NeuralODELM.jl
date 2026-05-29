@@ -35,7 +35,7 @@ using .Data: build_tokenizer, load_corpus, encode_corpus, make_batches,
              save_tokenizer, load_tokenizer, split_train_val
 using .Training: train!, lm_loss, save_checkpoint, load_checkpoint
 using .Evaluation: evaluate_perplexity, evaluate_loss
-using .Generation: generate_text, generate_text_with_cache, sample_from_logits
+using .Generation: generate_text, sample_from_logits
 using .Models: build_model
 
 end # module

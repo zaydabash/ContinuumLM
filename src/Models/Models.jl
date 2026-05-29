@@ -17,7 +17,7 @@ using .ContinuousTransformer
 using .NeuralODEBlockModule
 using .LanguageModel
 
-export build_model, LanguageModel, LanguageModelStruct, LMState, init_state, generate_step
+export build_model, LanguageModel, LanguageModelStruct
 
 """
     build_model(mc)

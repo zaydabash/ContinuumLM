@@ -20,7 +20,6 @@ tokens → embeddings → Neural ODE Transformer → LM head → logits
 - **Proper adjoint sensitivity methods** for efficient backpropagation (InterpolatingAdjoint, BacksolveAdjoint)
 - **Custom continuous-attention kernel integrator** (RK4-style fixed-step integration)
 - **Reversible ODE design** for memory-efficient training
-- **KV caching** for fast autoregressive generation
 - **TensorBoard logging** for experiment tracking
 - **Discrete Transformer baseline** for comparison
 - **Full training pipeline** with checkpointing and validation
@@ -209,10 +208,10 @@ This replaces discrete layer stacking with continuous evolution, allowing the mo
 - Automatically uses `BacksolveAdjoint` for optimal memory usage
 - Reconstructs intermediate states on-the-fly during backprop
 
-**KV Caching:**
-- Efficient autoregressive generation with cached keys/values
-- Avoids recomputing attention for previous tokens
-- Use `generate_text_with_cache()` for faster inference
+**Generation:**
+- Autoregressive sampling via `generate_text()` with temperature, top-k, and top-p
+- Full-sequence recompute at each step (KV caching is not applicable to the
+  continuous-depth ODE core, which has no discrete per-layer key/value state)
 
 ### Comparison: Discrete vs Continuous
 
