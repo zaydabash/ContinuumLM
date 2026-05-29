@@ -89,9 +89,13 @@ Save a tokenizer to disk.
 """
 function save_tokenizer(tok::SimpleTokenizer, path::String)
     mkpath(dirname(path))
+    # One token per line; the 1-based line number is the token ID.
+    # Tokens never contain whitespace (the corpus is split on whitespace and
+    # punctuation), so each line holds exactly one token even when that token
+    # is itself a comma. This preserves index order exactly on round-trip.
     open(path, "w") do io
-        for (word, id) in tok.vocab
-            write(io, "$word,$id\n")
+        for word in tok.idx_to_token
+            write(io, word, "\n")
         end
     end
 end
@@ -102,25 +106,16 @@ end
 Load a tokenizer from disk.
 """
 function load_tokenizer(path::String)
-    vocab = Dict{String, Int}()
     idx_to_token = String[]
-    max_id = 0
     open(path, "r") do io
         for line in eachline(io)
-            parts = split(line, ',')
-            if length(parts) == 2
-                word = parts[1]
-                id = parse(Int, parts[2])
-                vocab[word] = id
-                if id > max_id
-                    max_id = id
-                end
-            end
+            # eachline strips the trailing newline; the line is the token itself.
+            push!(idx_to_token, line)
         end
     end
-    idx_to_token = Vector{String}(undef, max_id)
-    for (word, id) in vocab
-        idx_to_token[id] = word
+    vocab = Dict{String, Int}()
+    for (id, word) in enumerate(idx_to_token)
+        vocab[word] = id
     end
     unk_token_id = get(vocab, "<UNK>", 1)
     return SimpleTokenizer(vocab, idx_to_token, unk_token_id)
