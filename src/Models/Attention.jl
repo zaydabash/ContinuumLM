@@ -186,14 +186,13 @@ end
 function (tb::TransformerBlock)(x; mask::Bool=true, cache::Union{Nothing,KVCache}=nothing)
     # x: (d_model, seq, batch)
     if cache !== nothing
-        # Generation mode with cache
-        h_norm = tb.norm1(x)
-        h_attn, new_cache = tb.attn(h_norm; mask=mask, cache=cache)
+        # Generation mode with cache — Post-LN matching training mode exactly
+        h_attn, new_cache = tb.attn(x; mask=mask, cache=cache)
         h = tb.norm1(x .+ h_attn)
         h2 = tb.norm2(h .+ tb.ff(h))
         return h2, new_cache
     else
-        # Training mode: no cache
+        # Training mode: Post-LN
         h = tb.norm1(x .+ tb.attn(x; mask=mask))
         h2 = tb.norm2(h .+ tb.ff(h))
         return h2

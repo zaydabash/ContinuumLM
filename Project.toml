@@ -1,6 +1,6 @@
 name = "NeuralODELM"
 uuid = "12345678-abcd-4abc-9def-1234567890ab"
-authors = ["Zayd Bashir <you@example.com>"]
+authors = ["Zayd Bashir <zayd.a.bashir@gmail.com>"]
 version = "0.1.0"
 
 [deps]
