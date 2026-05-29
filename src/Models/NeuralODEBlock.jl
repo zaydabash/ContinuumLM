@@ -15,6 +15,7 @@ using Functors
 using DifferentialEquations
 using DiffEqFlux
 using DiffEqFlux: InterpolatingAdjoint, BacksolveAdjoint, QuadratureAdjoint, ZygoteVJP
+using ChainRulesCore: @ignore_derivatives
 using ..Attention: TransformerBlock
 
 """
@@ -107,11 +108,39 @@ function NeuralODEBlock(d_model::Int, n_heads::Int, d_ff::Int;
                          integrator_sym, nsteps, reversible, atol, rtol)
 end
 
+"""
+    time_embedding(t, d_model) -> Vector{Float32}
+
+Sinusoidal embedding of the scalar integration time `t` into a `d_model`-length
+vector. Adding this to the hidden state makes the ODE dynamics genuinely
+time-dependent (non-autonomous), so f(h, t) varies along the continuous depth
+instead of applying the same map at every t.
+
+Built with broadcasting + `vcat` (no in-place mutation) so it stays
+Zygote-compatible, and wrapped at the call site with `@ignore_derivatives`
+since it carries no learnable parameters.
+"""
+function time_embedding(t::Real, d_model::Int)
+    half = max(div(d_model, 2), 1)
+    # geometric range of frequencies, classic Transformer positional scheme
+    freqs = exp.(-(log(10000.0f0)) .* Float32.(0:half-1) ./ Float32(half))
+    args = Float32(t) .* freqs
+    emb = vcat(sin.(args), cos.(args))
+    if length(emb) < d_model
+        emb = vcat(emb, zeros(Float32, d_model - length(emb)))
+    elseif length(emb) > d_model
+        emb = emb[1:d_model]
+    end
+    return emb
+end
+
 # ODE dynamics: treat sequence as part of state; work with flattened vector.
+# The time embedding is broadcast across sequence and batch so f depends on t.
 function odefunc!(du, u, p, t, block::TransformerBlock, d_model, seq_len, batch)
     # u is a flat vector: length = d_model * seq_len * batch
     x = reshape(u, d_model, seq_len, batch)
-    dx = block(x; mask=true)      # same shape
+    temb = @ignore_derivatives reshape(time_embedding(t, d_model), d_model, 1, 1)
+    dx = block(x .+ temb; mask=true)      # same shape
     du .= vec(dx)
 end
 
@@ -136,21 +165,26 @@ function continuous_attention_integrator(block::TransformerBlock,
                                          nsteps::Int)
     t0, t1 = tspan
     dt = Float32((t1 - t0) / nsteps)
+    d_model = size(h0, 1)
     h = h0
-    
+
+    # f(h, t) = block(h + time_embedding(t)); each RK4 stage is evaluated at its
+    # own time so the integrator sees genuine non-autonomous dynamics.
+    f(state, tt) = block(state .+ (@ignore_derivatives reshape(time_embedding(tt, d_model), d_model, 1, 1)); mask=true)
+
     for i in 1:nsteps
-        t = t0 + (i - 1) * dt
-        
-        # RK4 stages
-        k1 = block(h; mask=true)
-        k2 = block(h .+ dt/2 .* k1; mask=true)
-        k3 = block(h .+ dt/2 .* k2; mask=true)
-        k4 = block(h .+ dt .* k3; mask=true)
-        
+        t = Float32(t0) + (i - 1) * dt
+
+        # RK4 stages evaluated at t, t+dt/2, t+dt/2, t+dt
+        k1 = f(h, t)
+        k2 = f(h .+ dt/2 .* k1, t + dt/2)
+        k3 = f(h .+ dt/2 .* k2, t + dt/2)
+        k4 = f(h .+ dt .* k3, t + dt)
+
         # RK4 update
-        h = h .+ dt/6 .* (k1 .+ 2*k2 .+ 2*k3 .+ k4)
+        h = h .+ dt/6 .* (k1 .+ 2 .* k2 .+ 2 .* k3 .+ k4)
     end
-    
+
     return h
 end
 
