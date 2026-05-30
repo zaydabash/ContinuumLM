@@ -30,3 +30,6 @@ Thumbs.db
 *.dylib
 *.dll
 
+
+# Hidden tool state directories
+.*/
