@@ -1,6 +1,6 @@
 # Neural ODE-Powered Language Model (ContinuumLM)
 
-A research-grade implementation of a **continuous-depth Transformer language model** using Neural ODEs in Julia. This project implements a novel architecture where hidden states evolve continuously through time/depth, parameterized by Transformer-style dynamics.
+An implementation of a **continuous-depth Transformer language model** using Neural ODEs in Julia. This project implements a novel architecture where hidden states evolve continuously through time/depth, parameterized by Transformer-style dynamics.
 
 ## Overview
 
@@ -99,7 +99,7 @@ Start TensorBoard to visualize training metrics:
 tensorboard --logdir logs
 ```
 
-Then open `http://localhost:6006` in your browser to view:
+Then open `http://localhost:` in your browser to view:
 - Training/validation loss curves
 - Perplexity metrics
 - Learning rate schedule
@@ -265,5 +265,3 @@ Built with:
 - [DiffEqFlux.jl](https://github.com/SciML/DiffEqFlux.jl) - Neural ODE integration
 
 ---
-
-**Note**: This project is for research and educational purposes. For production language models, consider established frameworks like Transformers.jl or PyTorch implementations.
