@@ -1,0 +1,39 @@
+# Comparison experiment: discrete Transformer baseline
+# Matched architecture/hyperparameters with comparison_ode.toml for a
+# fair Neural ODE vs discrete Transformer comparison on real PTB text.
+
+[model]
+d_model = 128
+n_heads = 4
+d_ff = 512
+vocab_size = 4000
+max_seq_len = 64
+is_neural_ode = false
+ode_t0 = 0.0
+ode_t1 = 1.0
+ode_solver = "RK4"
+n_layers = 3
+
+[training]
+batch_size = 8
+seq_len = 64
+num_steps = 3000
+log_every = 100
+eval_every = 500
+lr = 1e-3
+weight_decay = 0.01
+grad_clip = 1.0
+warmup_steps = 300
+device = "cpu"
+checkpoint_dir = "checkpoints/comparison_baseline"
+checkpoint_every = 1500
+save_best = true
+seed = 42
+log_dir = "logs"
+run_name = "comparison_baseline"
+
+[data]
+corpus_path = "data/corpus.txt"
+tokenizer_path = "data/tokenizer_comparison.json"
+vocab_size = 4000
+train_split = 0.9

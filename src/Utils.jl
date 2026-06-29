@@ -8,6 +8,8 @@ module Utils
 using CUDA
 import Random
 
+export select_device, set_seed, ensure_dir
+
 """
     select_device(device::String)
 

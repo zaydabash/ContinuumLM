@@ -8,6 +8,8 @@ module Config
 
 using TOML
 
+export ModelConfig, TrainingConfig, DataConfig, ConfigBundle, load_config
+
 """
     ModelConfig
 

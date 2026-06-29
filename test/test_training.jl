@@ -25,9 +25,12 @@ function test_training()
     seqs = encode_corpus(tok, test_corpus; seq_len=8)
     
     # Split into train/val
+    # batch_size=1 here: this tiny fixture corpus only yields a couple of
+    # sequences after the 70/30 split, too few for a batch_size of 2 on
+    # both sides. This test only needs train! to run without crashing.
     train_seqs, val_seqs = split_train_val(seqs, 0.7)
-    train_batches = make_batches(train_seqs, 2)
-    val_batches = length(val_seqs) > 0 ? make_batches(val_seqs, 2) : nothing
+    train_batches = make_batches(train_seqs, 1)
+    val_batches = length(val_seqs) > 0 ? make_batches(val_seqs, 1) : nothing
     
     # Create tiny model config
     mc = ModelConfig(

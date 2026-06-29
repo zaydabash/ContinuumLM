@@ -5,7 +5,7 @@ Test suite for Neural ODE Language Model.
 """
 
 using Pkg
-Pkg.activate(@__DIR__ * "/..")
+Pkg.activate(joinpath(@__DIR__, ".."))
 
 using Test
 

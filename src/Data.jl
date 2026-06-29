@@ -21,11 +21,11 @@ struct SimpleTokenizer
 end
 
 """
-    build_tokenizer(corpus::String; vocab_size::Int)
+    build_tokenizer(corpus::AbstractString; vocab_size::Int)
 
 Build a simple word-level tokenizer from the given corpus.
 """
-function build_tokenizer(corpus::String; vocab_size::Int = 8000)
+function build_tokenizer(corpus::AbstractString; vocab_size::Int = 8000)
     words = split(corpus, r"\s+|(?=[.,!?;])|(?<=[.,!?;])")
     word_counts = Dict{String, Int}()
     for word in words
@@ -62,11 +62,11 @@ function build_tokenizer(corpus::String; vocab_size::Int = 8000)
 end
 
 """
-    encode(tok::SimpleTokenizer, text::String) -> Vector{Int}
+    encode(tok::SimpleTokenizer, text::AbstractString) -> Vector{Int}
 
 Encode text to token IDs.
 """
-function encode(tok::SimpleTokenizer, text::String)
+function encode(tok::SimpleTokenizer, text::AbstractString)
     words = split(text, r"\s+|(?=[.,!?;])|(?<=[.,!?;])", keepempty=false)
     ids = [get(tok.vocab, word, tok.unk_token) for word in words]
     return ids
@@ -141,7 +141,7 @@ end
 Encode corpus to token ids and chunk into sequences of length `seq_len`.
 Return a vector of integer arrays.
 """
-function encode_corpus(tok::SimpleTokenizer, corpus::String; seq_len::Int)
+function encode_corpus(tok::SimpleTokenizer, corpus::AbstractString; seq_len::Int)
     ids = encode(tok, corpus)
     n = length(ids) ÷ seq_len
     if n == 0

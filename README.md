@@ -220,6 +220,61 @@ This replaces discrete layer stacking with continuous evolution, allowing the mo
 
 The continuous formulation can be more parameter-efficient and theoretically allows for adaptive depth.
 
+## Results
+
+To check whether this actually trains and whether continuous depth helps,
+the Neural ODE model and the discrete Transformer baseline were trained
+with **matched architecture and hyperparameters** on the real Penn
+Treebank (PTB) word-level corpus (`data/corpus.txt`, ~887K words):
+
+- `d_model=128, n_heads=4, d_ff=512, n_layers=3, seq_len=64, batch_size=8`
+- `vocab_size=4000`, `lr=1e-3` (AdamW, 300-step warmup), `seed=42`
+- 3000 training steps, evaluated every 500 steps on a held-out validation split
+- Configs: [`config/comparison_ode.toml`](config/comparison_ode.toml), [`config/comparison_baseline.toml`](config/comparison_baseline.toml)
+
+### Validation perplexity over training
+
+| Step | Discrete Transformer | Neural ODE |
+|------|----------------------|------------|
+| 500  | 229.0                | 219.8      |
+| 1000 | 166.9                | 163.2      |
+| 1500 | 139.7                | 142.1      |
+| 2000 | 127.2                | 132.2      |
+| 2500 | 118.0                | 124.7      |
+| 3000 | **113.7**            | **119.9**  |
+
+### Non-neural reference points (same corpus, same train/val split)
+
+| Model                          | Val. Perplexity |
+|---------------------------------|-----------------|
+| Unigram (frequency-only)         | 426.8           |
+| Bigram (Laplace-smoothed)        | 321.5           |
+| Discrete Transformer (3000 steps)| **113.7**       |
+| Neural ODE (3000 steps)          | **119.9**       |
+
+### Wall-clock cost
+
+| Model                 | Time / training step | Time for 3000 steps |
+|------------------------|----------------------|----------------------|
+| Discrete Transformer    | ~0.09s               | ~4.7 min             |
+| Neural ODE (RK4, 4 steps)| ~0.29s              | ~14.6 min            |
+
+### Takeaways
+
+- Both models clearly learn: they beat the bigram baseline by **2.8-3.2x**
+  in perplexity within 3000 steps, on real text, not a toy corpus.
+- At this scale and step count, the **discrete Transformer baseline edges
+  out the Neural ODE variant** (113.7 vs 119.9 final val perplexity). The
+  Neural ODE path is *not* free — it costs roughly **3x the wall-clock
+  time per step** (RK4 with 4 substeps means 4 forward passes through the
+  block per training step) without a perplexity improvement here.
+- This is a single seed, single short run at modest model scale — not a
+  sweep and not a claim that continuous depth never helps. It does
+  establish a real, reproducible baseline number instead of an
+  architecture description with no evidence behind it.
+- Reproduce with: `julia --project=. scripts/train_neural_ode_lm.jl config/comparison_ode.toml`
+  (swap in `comparison_baseline.toml` for the discrete baseline).
+
 ## Limitations & Future Work
 
 This is a **research scaffold**, not a production LLM. Current limitations:
@@ -228,18 +283,45 @@ This is a **research scaffold**, not a production LLM. Current limitations:
 - Basic tokenization (word-level)
 - Limited dataset support
 
+### No incremental/cached inference for the ODE path
+
+Generation here recomputes the full sequence at every new token (see
+`generate_text` in `Generation.jl`). Standard KV caching does not transfer
+to this architecture: a discrete Transformer caches per-layer keys/values
+because each layer is a distinct, fixed function, but the ODE core has no
+discrete layers, only a continuous trajectory `h(t)` integrated from `h(0)`
+to `h(T)` — there is no fixed per-layer state to cache. This is a known
+open problem for continuous-depth and attention-based ODE language models,
+not something specific to this implementation. Two directions in the
+literature address it:
+
+- **ODE-RNN / Latent ODEs** (Rubanova, Chen & Duvenaud, 2019) interleave
+  discrete recurrent updates at observed tokens with continuous evolution
+  between them, which would let a new token update a finite recurrent state
+  rather than re-running the ODE over the whole prefix.
+- **Structured state-space models** (Gu et al., "S4", 2022; Gu & Dao,
+  "Mamba", 2023) are also derived from continuous-time dynamical systems but
+  use a linear time-invariant formulation, which has an exact equivalent
+  recurrent form and supports genuine O(1)-per-token incremental inference.
+  They are not attention-based and are architecturally distinct from this
+  repo's Transformer-dynamics ODE, but they're the closest thing the field
+  has to "Neural ODEs with caching" and the most realistic path if this
+  limitation needs to be lifted rather than just documented.
+
 **Potential extensions:**
 
-- KV caching for Neural ODE path
 - Larger model scales
 - Advanced ODE solvers and adjoint methods
 - Additional regularization techniques
 - Multi-GPU training
-- Integration with HuggingFace tokenizers
+- Integration with HuggingFace tokenizers (subword/BPE instead of word-level)
 
 ## References
 
-- **Neural ODEs**: Chen et al., "Neural Ordinary Differential Equations" (NeurIPS 2018)
+- **Neural ODEs**: Chen, Rubanova, Bettencourt & Duvenaud, "Neural Ordinary Differential Equations" (NeurIPS 2018)
+- **ODE-Transformer connection**: Lu et al., "Understanding and Improving Transformer From a Multi-Particle Dynamic System Point of View" (2019) — the multi-particle ODE view of Transformer depth that this repo's `dh/dt = TransformerBlock(h, t)` formulation builds on
+- **Latent ODEs / ODE-RNN**: Rubanova, Chen & Duvenaud, "Latent ODEs for Irregularly-Sampled Time Series" (NeurIPS 2019) — the established approach for combining discrete recurrent state updates with continuous-time evolution, relevant to the caching limitation above
+- **Structured State Space Models**: Gu, Goel & Ré, "Efficiently Modeling Long Sequences with Structured State Spaces" (S4, ICLR 2022); Gu & Dao, "Mamba: Linear-Time Sequence Modeling with Selective State Spaces" (2023)
 - **Continuous Normalizing Flows**: Grathwohl et al., "FFJORD" (ICLR 2019)
 - **Transformers**: Vaswani et al., "Attention Is All You Need" (NeurIPS 2017)
 

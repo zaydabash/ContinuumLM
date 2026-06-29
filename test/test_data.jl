@@ -28,17 +28,20 @@ function test_data()
     @test decoded isa String
     
     # Test corpus encoding
-    seqs = encode_corpus(tok, test_corpus; seq_len=20)
+    # seq_len=8 (rather than a larger value) so this short fixture corpus
+    # yields multiple sequences -- enough for batching and an 80/20 split
+    # below to both be non-empty.
+    seqs = encode_corpus(tok, test_corpus; seq_len=8)
     @test length(seqs) > 0
-    @test all(s -> length(s) == 20, seqs)
-    
+    @test all(s -> length(s) == 8, seqs)
+
     # Test batching
     batches = make_batches(seqs, 2)
     batch_count = 0
     for (x, y) in batches
         batch_count += 1
-        @test size(x) == (19, 2)  # seq_len-1, batch_size
-        @test size(y) == (19, 2)
+        @test size(x) == (7, 2)  # seq_len-1, batch_size
+        @test size(y) == (7, 2)
         @test all(x .>= 0)
         @test all(y .>= 0)
     end
