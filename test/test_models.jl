@@ -31,6 +31,26 @@ function test_models()
     attn = Models.Attention.MultiHeadSelfAttention(d_model, 4)
     h_attn = attn(h; mask=true)
     @test size(h_attn) == (d_model, seq_len, batch_size)
+
+    # Regression test: causal masking must block future positions, not past ones.
+    # Caught a real bug where the mask direction was inverted, letting the model
+    # attend to (and trivially copy) the token it was supposed to predict.
+    let
+        d, nh = 8, 2
+        attn2 = Models.Attention.MultiHeadSelfAttention(d, nh)
+        sl, bs = 6, 1
+        h1 = randn(Float32, d, sl, bs)
+        # Perturb only the LAST timestep's input.
+        h2 = copy(h1)
+        h2[:, end, :] .+= 100f0
+        out1 = attn2(h1; mask=true)
+        out2 = attn2(h2; mask=true)
+        # Earlier query positions must be unaffected by a change to a later
+        # (future) position -- if the mask is inverted this assertion fails.
+        @test out1[:, 1:end-1, :] ≈ out2[:, 1:end-1, :]
+        # The perturbed position itself should still see a different result.
+        @test !(out1[:, end, :] ≈ out2[:, end, :])
+    end
     
     # Test feedforward block
     ff = Models.Attention.FeedForwardBlock(d_model, 256)
@@ -49,7 +69,7 @@ function test_models()
     
     # Test Neural ODE block (smaller for speed)
     # Note: This may be slow, so we use a very small configuration
-    ode_block = Models.NeuralODEBlock.NeuralODEBlock(d_model, 2, 128; t0=0.0, t1=0.5)
+    ode_block = Models.NeuralODEBlockModule.NeuralODEBlock(d_model, 2, 128; t0=0.0, t1=0.5)
     h_ode = ode_block(h)
     @test size(h_ode) == (d_model, seq_len, batch_size)
     
@@ -83,8 +103,9 @@ function test_models()
     @test size(logits_ode) == (vocab_size, seq_len, batch_size)
     
     # Test gradient flow
-    loss_discrete, back_discrete = Flux.withgradient(() -> 
-        sum(model_discrete(x_tokens)), Flux.params(model_discrete))
+    loss_discrete, grads_discrete = Flux.withgradient(model_discrete) do m
+        sum(m(x_tokens))
+    end
     @test !isnan(loss_discrete)
     
     # Note: Neural ODE gradients can be expensive, so we skip in basic tests

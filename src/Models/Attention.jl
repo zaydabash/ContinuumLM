@@ -63,9 +63,11 @@ function (m::MultiHeadSelfAttention)(x; mask::Bool=true)
     scores = NNlib.batched_mul(permutedims(K_p, (2, 1, 3)), Q_p) .* scale
 
     if mask
-        # causal mask: position i cannot attend to position j > i
+        # scores is indexed [key_pos, query_pos, ...] (see batched_mul above: the
+        # first operand's seq axis -> key, Q_p's seq axis -> query). A query may
+        # only attend to keys at or before it, so mask out key_pos > query_pos.
         # @ignore_derivatives tells Zygote the mask has no learnable params
-        causal = @ignore_derivatives Float32[j > i ? -1f6 : 0f0 for i in 1:seq_len, j in 1:seq_len]
+        causal = @ignore_derivatives Float32[key_pos > query_pos ? -1f6 : 0f0 for key_pos in 1:seq_len, query_pos in 1:seq_len]
         scores = scores .+ causal
     end
 
