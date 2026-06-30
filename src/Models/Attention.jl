@@ -39,7 +39,7 @@ function (m::MultiHeadSelfAttention)(x; mask::Bool=true)
     # x: (d_model, seq_len, batch)
     d_model, seq_len, batch = size(x)
 
-    # Full-sequence attention via batched matmul — no in-place mutation,
+    # Full-sequence attention via batched matmul, no in-place mutation,
     # fully Zygote-compatible.
     Q = m.Wq(x)  # (d_model, seq, batch)
     K = m.Wk(x)
@@ -127,7 +127,7 @@ function TransformerBlock(d_model::Int, n_heads::Int, d_ff::Int)
 end
 
 function (tb::TransformerBlock)(x; mask::Bool=true)
-    # x: (d_model, seq, batch) — Post-LN
+    # x: (d_model, seq, batch), Post-LN
     h = tb.norm1(x .+ tb.attn(x; mask=mask))
     h2 = tb.norm2(h .+ tb.ff(h))
     return h2

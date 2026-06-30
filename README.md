@@ -265,10 +265,10 @@ Treebank (PTB) word-level corpus (`data/corpus.txt`, ~887K words):
   in perplexity within 3000 steps, on real text, not a toy corpus.
 - At this scale and step count, the **discrete Transformer baseline edges
   out the Neural ODE variant** (113.7 vs 119.9 final val perplexity). The
-  Neural ODE path is *not* free — it costs roughly **3x the wall-clock
+  Neural ODE path is *not* free, it costs roughly **3x the wall-clock
   time per step** (RK4 with 4 substeps means 4 forward passes through the
   block per training step) without a perplexity improvement here.
-- This is a single seed, single short run at modest model scale — not a
+- This is a single seed, single short run at modest model scale, not a
   sweep and not a claim that continuous depth never helps. It does
   establish a real, reproducible baseline number instead of an
   architecture description with no evidence behind it.
@@ -290,7 +290,7 @@ Generation here recomputes the full sequence at every new token (see
 to this architecture: a discrete Transformer caches per-layer keys/values
 because each layer is a distinct, fixed function, but the ODE core has no
 discrete layers, only a continuous trajectory `h(t)` integrated from `h(0)`
-to `h(T)` — there is no fixed per-layer state to cache. This is a known
+to `h(T)`, there is no fixed per-layer state to cache. This is a known
 open problem for continuous-depth and attention-based ODE language models,
 not something specific to this implementation. Two directions in the
 literature address it:
@@ -319,8 +319,8 @@ literature address it:
 ## References
 
 - **Neural ODEs**: Chen, Rubanova, Bettencourt & Duvenaud, "Neural Ordinary Differential Equations" (NeurIPS 2018)
-- **ODE-Transformer connection**: Lu et al., "Understanding and Improving Transformer From a Multi-Particle Dynamic System Point of View" (2019) — the multi-particle ODE view of Transformer depth that this repo's `dh/dt = TransformerBlock(h, t)` formulation builds on
-- **Latent ODEs / ODE-RNN**: Rubanova, Chen & Duvenaud, "Latent ODEs for Irregularly-Sampled Time Series" (NeurIPS 2019) — the established approach for combining discrete recurrent state updates with continuous-time evolution, relevant to the caching limitation above
+- **ODE-Transformer connection**: Lu et al., "Understanding and Improving Transformer From a Multi-Particle Dynamic System Point of View" (2019), the multi-particle ODE view of Transformer depth that this repo's `dh/dt = TransformerBlock(h, t)` formulation builds on
+- **Latent ODEs / ODE-RNN**: Rubanova, Chen & Duvenaud, "Latent ODEs for Irregularly-Sampled Time Series" (NeurIPS 2019), the established approach for combining discrete recurrent state updates with continuous-time evolution, relevant to the caching limitation above
 - **Structured State Space Models**: Gu, Goel & Ré, "Efficiently Modeling Long Sequences with Structured State Spaces" (S4, ICLR 2022); Gu & Dao, "Mamba: Linear-Time Sequence Modeling with Selective State Spaces" (2023)
 - **Continuous Normalizing Flows**: Grathwohl et al., "FFJORD" (ICLR 2019)
 - **Transformers**: Vaswani et al., "Attention Is All You Need" (NeurIPS 2017)
