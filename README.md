@@ -232,6 +232,8 @@ Treebank (PTB) word-level corpus (`data/corpus.txt`, ~887K words):
 - 3000 training steps, evaluated every 500 steps on a held-out validation split
 - Configs: [`config/comparison_ode.toml`](config/comparison_ode.toml), [`config/comparison_baseline.toml`](config/comparison_baseline.toml)
 
+![Training loss and validation perplexity, Neural ODE vs discrete Transformer](assets/comparison_plot.png)
+
 ### Validation perplexity over training
 
 | Step | Discrete Transformer | Neural ODE |
